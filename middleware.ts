@@ -2,8 +2,6 @@ import { createServerClient, type CookieOptions } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  console.log('🔄 Middleware running for:', request.nextUrl.pathname)
-  
   let response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -19,45 +17,30 @@ export async function middleware(request: NextRequest) {
           return request.cookies.get(name)?.value
         },
         set(name: string, value: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value,
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value,
-            ...options,
-          })
+          request.cookies.set({ name, value, ...options })
+          response = NextResponse.next({ request: { headers: request.headers } })
+          response.cookies.set({ name, value, ...options })
         },
         remove(name: string, options: CookieOptions) {
-          request.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
-          response = NextResponse.next({
-            request: {
-              headers: request.headers,
-            },
-          })
-          response.cookies.set({
-            name,
-            value: '',
-            ...options,
-          })
+          request.cookies.set({ name, value: '', ...options })
+          response = NextResponse.next({ request: { headers: request.headers } })
+          response.cookies.set({ name, value: '', ...options })
         },
       },
     }
   )
 
   const { data: { user } } = await supabase.auth.getUser()
-  console.log('🔄 Middleware auth check:', { hasUser: !!user, path: request.nextUrl.pathname })
+
+  // Protect dashboard and other authenticated routes server-side
+  const protectedRoutes = ['/dashboard', '/profile', '/companies', '/matches']
+  const isProtectedRoute = protectedRoutes.some(route => 
+    request.nextUrl.pathname.startsWith(route)
+  )
+
+  if (isProtectedRoute && !user) {
+    return NextResponse.redirect(new URL('/auth/login', request.url))
+  }
 
   return response
 }
